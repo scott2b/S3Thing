@@ -1,0 +1,16 @@
+<html>
+<body>
+   <h2>Get your fresh hot links here:</h2>
+   <ul>
+     {% for name, url in links %}
+     <li><a href="{{ url }}">{{ name }}</a></li>
+     {% endfor %}
+   </ul>
+
+   <p><strong>Note:</strong> Don't navigate away from this page until you have downloaded all of your purchased media.</p>
+
+   <div>
+   <a href="/">Home</a>
+   </div>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Purchase resource download</title>
+    <link rel="stylesheet" href="style.css">
+    <meta http-equiv="Content-Security-Policy "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval' ">
+    <script src="https://polyfill.io/v3/polyfill.min.js?version=3.52.1&features=fetch"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+  </head>
+  <body>
+    <h3>Purchase items from {{ bucket }}/{{ prefix }}</h3>
+    <h4>A buck a piece</h4>
+    <p>Select the items you wish to purchase for download:</p>
+    <section>
+        <form id="item-select">
+          <ul>
+            {% for file in files %}
+              <li><input type="checkbox" name="{{ file }}" value="{{ file }}"/ > $1 {{ file }}</li>
+            {% endfor %}
+          </ul>
+        </form>
+      </div>
+      <button id="checkout-button">Checkout</button>
+    </section>
+  <script type="text/javascript">
+    var stripe = Stripe('{{ stripe_key }}');
+    var checkoutButton = document.getElementById("checkout-button");
+    checkoutButton.addEventListener("click", function () {
+      var inputs = document.getElementById("item-select").elements;
+      var items = [];
+      Array.from(inputs).forEach(function(item, index) {
+        if (item.checked) {
+            items.push(item.value);
+        }
+      });
+      fetch("/create-session", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ "lineItems": items })
+      })
+        .then(function (response) {
+          return response.json();
+        })
+        .then(function (session) {
+          return stripe.redirectToCheckout({ sessionId: session.id });
+        })
+        .then(function (result) {
+          // If redirectToCheckout fails due to a browser or network
+          // error, you should display the localized error message to your
+          // customer using error.message.
+          if (result.error) {
+            alert(result.error.message);
+          }
+        })
+        .catch(function (error) {
+          console.error("Error:", error);
+        });
+    });
+  </script>
+  </body>
+</html>
