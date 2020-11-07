@@ -13,7 +13,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import sqlite3
 
+
+DB = 'db.db'
 DOMAIN = os.environ['DOMAIN']
 AWS_PROFILE = os.environ['AWS_PROFILE']
 BUCKET = os.environ['BUCKET']
@@ -76,16 +79,22 @@ def generate_presigned_url(resource):
 @app.route('/success')
 def payment_success():
     page = request.args.get('ref')
-    path = f'links/{page}'
-    while not os.path.exists(path):
-        print('Waiting ...')
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    files = ''
+    for i in range(5):
+        row = c.execute("SELECT files FROM purchases where key=? AND fulfilled=1", (page,))
+        row = row.fetchone()
+        if row[0]:
+            files = row[0].split(',')
+            break
         time.sleep(1)
+        print('Waiting...')
+    conn.close()
     links = []
-    with open(path) as f:
-        resources = f.read().split(',')
-        for r in resources:
-            url = generate_presigned_url(r)
-            links.append( (r, url) )
+    for f in files:
+        url = generate_presigned_url(f)
+        links.append( (f, url) )
     return render_template('purchased.html', links=links)
 
 
@@ -101,7 +110,11 @@ def fulfillment():
     # the signature manually if needed.
     if payload['type'] == 'checkout.session.completed':
         _id = payload['data']['object']['client_reference_id']
-        shutil.copy(f'orders/{_id}', f'links/{_id}')
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
+        c.execute(f"UPDATE purchases SET fulfilled=1 where key='{_id}'")
+        conn.commit()
+        conn.close()
     try:
       event = stripe.Webhook.construct_event(
         payload, sig_header, WEBHOOK_SECRET
@@ -113,8 +126,6 @@ def fulfillment():
     # is any of this being executed?
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        #_id = payload['data']['object']['id']
-        #shutil.copy(f'orders/{_id}', f'links/{_id}')
     sys.stdout.flush()
     return jsonify({'status': 'OK'})
 
@@ -150,8 +161,11 @@ def create_checkout_session():
             success_url=DOMAIN + f'/success?ref={ref_id}',
             cancel_url=DOMAIN + '/cancel.html',
         )
-        with open(f'orders/{ref_id}', 'w') as orderfile:
-            orderfile.write(resources)
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
+        c.execute(f"INSERT INTO purchases VALUES ('{ref_id}','{resources}', 0)")
+        conn.commit()
+        conn.close()
         return jsonify({'id': checkout_session.id})
     except Exception as e:
         raise
